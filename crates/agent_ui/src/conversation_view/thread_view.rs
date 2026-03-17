@@ -156,6 +156,20 @@ impl ThreadFeedbackState {
     }
 }
 
+struct GeneratingSpinner;
+
+impl GeneratingSpinner {
+    fn new() -> Self {
+        Self
+    }
+}
+
+impl Render for GeneratingSpinner {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        SpinnerLabel::new().size(LabelSize::Small)
+    }
+}
+
 pub enum AcpThreadViewEvent {
     FirstSendRequested { content: Vec<acp::ContentBlock> },
 }
@@ -219,6 +233,7 @@ pub struct ThreadView {
     pub can_fast_track_queue: bool,
     pub hovered_edited_file_buttons: Option<usize>,
     pub in_flight_prompt: Option<Vec<acp::ContentBlock>>,
+    generating_spinner: Entity<GeneratingSpinner>,
     pub _subscriptions: Vec<Subscription>,
     pub message_editor: Entity<MessageEditor>,
     pub add_context_menu_handle: PopoverMenuHandle<ContextMenu>,
@@ -393,6 +408,7 @@ impl ThreadView {
         }));
 
         let recent_history_entries = history.read(cx).get_recent_sessions(3);
+        let generating_spinner = cx.new(|_| GeneratingSpinner::new());
 
         let mut this = Self {
             id,
@@ -450,6 +466,7 @@ impl ThreadView {
             can_fast_track_queue: false,
             hovered_edited_file_buttons: None,
             in_flight_prompt: None,
+            generating_spinner,
             message_editor,
             add_context_menu_handle: PopoverMenuHandle::default(),
             thinking_effort_menu_handle: PopoverMenuHandle::default(),
@@ -4548,7 +4565,8 @@ impl ThreadView {
                     this.child(
                         h_flex()
                             .w_2()
-                            .child(SpinnerLabel::sand().size(LabelSize::Small)),
+                            .justify_center()
+                            .child(self.generating_spinner.clone()),
                     )
                     .child(
                         div().min_w(rems(8.)).child(
@@ -4560,7 +4578,12 @@ impl ThreadView {
                 } else if is_blocked_on_terminal_command {
                     this
                 } else {
-                    this.child(SpinnerLabel::new().size(LabelSize::Small))
+                    this.child(
+                        h_flex()
+                            .w_2()
+                            .justify_center()
+                            .child(self.generating_spinner.clone()),
+                    )
                 }
             })
             .when_some(elapsed_label, |this, elapsed| {
