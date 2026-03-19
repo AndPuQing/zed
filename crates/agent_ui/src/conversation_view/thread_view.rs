@@ -6,7 +6,7 @@ use crate::StartThreadIn;
 use gpui::{Corner, List};
 use language_model::{LanguageModelEffortLevel, Speed};
 use settings::update_settings_file;
-use ui::{ButtonLike, SplitButton, SplitButtonStyle, Tab};
+use ui::{ButtonLike, SpinnerLabel, SpinnerVariant, SplitButton, SplitButtonStyle, Tab};
 use workspace::SERIALIZATION_THROTTLE_TIME;
 
 use super::*;
@@ -156,17 +156,19 @@ impl ThreadFeedbackState {
     }
 }
 
-struct GeneratingSpinner;
+struct GeneratingSpinner {
+    variant: SpinnerVariant,
+}
 
 impl GeneratingSpinner {
-    fn new() -> Self {
-        Self
+    fn new(variant: SpinnerVariant) -> Self {
+        Self { variant }
     }
 }
 
 impl Render for GeneratingSpinner {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        SpinnerLabel::new().size(LabelSize::Small)
+        SpinnerLabel::with_variant(self.variant).size(LabelSize::Small)
     }
 }
 
@@ -234,6 +236,7 @@ pub struct ThreadView {
     pub hovered_edited_file_buttons: Option<usize>,
     pub in_flight_prompt: Option<Vec<acp::ContentBlock>>,
     generating_spinner: Entity<GeneratingSpinner>,
+    confirmation_spinner: Entity<GeneratingSpinner>,
     pub _subscriptions: Vec<Subscription>,
     pub message_editor: Entity<MessageEditor>,
     pub add_context_menu_handle: PopoverMenuHandle<ContextMenu>,
@@ -409,11 +412,12 @@ impl ThreadView {
             }));
         }));
 
-        let generating_spinner = cx.new(|_| GeneratingSpinner::new());
         let recent_history_entries = history
             .as_ref()
             .map(|h| h.read(cx).get_recent_sessions(3))
             .unwrap_or_default();
+        let generating_spinner = cx.new(|_| GeneratingSpinner::new(SpinnerVariant::Dots));
+        let confirmation_spinner = cx.new(|_| GeneratingSpinner::new(SpinnerVariant::Sand));
 
         let mut this = Self {
             id,
@@ -472,6 +476,7 @@ impl ThreadView {
             hovered_edited_file_buttons: None,
             in_flight_prompt: None,
             generating_spinner,
+            confirmation_spinner,
             message_editor,
             add_context_menu_handle: PopoverMenuHandle::default(),
             thinking_effort_menu_handle: PopoverMenuHandle::default(),
@@ -4571,7 +4576,7 @@ impl ThreadView {
                         h_flex()
                             .w_2()
                             .justify_center()
-                            .child(self.generating_spinner.clone()),
+                            .child(self.confirmation_spinner.clone()),
                     )
                     .child(
                         div().min_w(rems(8.)).child(
